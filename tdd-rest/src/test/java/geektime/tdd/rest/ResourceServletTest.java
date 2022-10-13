@@ -16,6 +16,7 @@ import java.io.PrintWriter;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.net.http.HttpResponse;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -30,7 +31,7 @@ public class ResourceServletTest extends ServletTest {
 
     private Providers providers;
 
-    private OutBoundBuilder builder;
+    private OutBoundBuilder response;
 
 
     @Override
@@ -49,7 +50,7 @@ public class ResourceServletTest extends ServletTest {
 
     @BeforeEach
     public  void beforeEach() {
-        builder = new OutBoundBuilder();
+        response = new OutBoundBuilder();
         RuntimeDelegate delegate = mock(RuntimeDelegate.class);
         RuntimeDelegate.setInstance(delegate);
         when(delegate.createHeaderDelegate(eq(NewCookie.class))).thenReturn(new RuntimeDelegate.HeaderDelegate<NewCookie>() {
@@ -63,15 +64,12 @@ public class ResourceServletTest extends ServletTest {
                 return newCookie.getName()+"="+newCookie.getValue();
             }
         });
-
-
     }
 
 
     @Test
     public void should_use_status_from_response() throws Exception {
-
-        builder.status(Response.Status.NOT_MODIFIED).build(router);
+        response.status(Response.Status.NOT_MODIFIED).returnFrom(router);
 
         HttpResponse<String> httpResponse = get("/test");
         assertEquals(Response.Status.NOT_MODIFIED.getStatusCode(), httpResponse.statusCode());
@@ -79,32 +77,60 @@ public class ResourceServletTest extends ServletTest {
 
     @Test
     public void should_use_http_headers_from_response() throws Exception {
-
-        MultivaluedMap<String,Object> headers = new MultivaluedHashMap<>();
-        headers.addAll("Set-Cookie",
-                new NewCookie.Builder("SESSION_ID").value("session").build(),
-                new NewCookie.Builder("USER_ID").value("user").build());
-
-
-        builder.headers(headers).build(router);
-
+        response.headers(testHeader()).returnFrom(router);
 
         HttpResponse<String> httpResponse = get("/test");
 
-        String[] respHeaders = httpResponse.headers().allValues("Set-Cookie").toArray(String[]::new);
-        assertArrayEquals(new String[]{"SESSION_ID=session","USER_ID=user"},respHeaders);
+        assertArrayEquals(new String[]{"SESSION_ID=session","USER_ID=user"},
+                httpResponse.headers().allValues("Set-Cookie").toArray(String[]::new));
     }
+
 
     @Test
     public void should_write_entity_to_http_response_message_body() throws Exception {
-        GenericEntity<Object> entity = new GenericEntity<>("entity",String.class);
-        Annotation[] annotations = new Annotation[0];
 
-        builder.entity(entity,annotations).build(router);
+        response.entity(new GenericEntity<Object>("entity",String.class), new Annotation[0])
+                .returnFrom(router);
 
         HttpResponse<String> httpResponse = get("/test");
         assertEquals("entity",httpResponse.body());
     }
+
+    @Test
+    public void should_use_response_from_web_app_ex() throws Exception {
+        response.status(Response.Status.FORBIDDEN)
+                .entity(new GenericEntity<Object>("error",String.class), new Annotation[0])
+                .headers(testHeader())
+                .throwFrom(router);
+
+        HttpResponse<String> httpResponse = get("/test");
+
+        assertEquals(Response.Status.FORBIDDEN.getStatusCode(),httpResponse.statusCode());
+        assertEquals("error",httpResponse.body());
+
+        assertArrayEquals(new String[]{"SESSION_ID=session","USER_ID=user"},
+                httpResponse.headers().allValues("Set-Cookie").toArray(String[]::new));
+    }
+
+    @Test
+    public void should_build_response_by_ex_mapper_from_web_app_ex() throws Exception {
+        when(router.dispatch(any(),eq(resourceContext))).thenThrow(RuntimeException.class);
+        when(providers.getExceptionMapper(eq(RuntimeException.class))).thenReturn(ex -> response.status(Response.Status.FORBIDDEN).build());
+
+        HttpResponse<String> httpResponse = get("/test");
+
+        assertEquals(Response.Status.FORBIDDEN.getStatusCode(),httpResponse.statusCode());
+    }
+
+
+    private static MultivaluedMap<String, Object> testHeader() {
+        MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
+        headers.addAll("Set-Cookie",
+                new NewCookie.Builder("SESSION_ID").value("session").build(),
+                new NewCookie.Builder("USER_ID").value("user").build());
+        return headers;
+    }
+
 
     class OutBoundBuilder{
         Response.Status status = Response.Status.OK;
@@ -134,16 +160,23 @@ public class ResourceServletTest extends ServletTest {
             return this;
         }
 
-        void build(ResourceRouter router){
-            OutboundResponse response = mock(OutboundResponse.class);
-            when(response.getStatus()).thenReturn(status.getStatusCode());
-            when(response.getHeaders()).thenReturn(headers);
-            when(response.getGenericEntity()).thenReturn(entity);
-            when(response.getAnnotations()).thenReturn(annotations);
-            when(response.getMediaType()).thenReturn(mediaType);
-            when(router.dispatch(any(), eq(resourceContext))).thenReturn(response);
+        void returnFrom(ResourceRouter router){
+            build(response -> when(router.dispatch(any(),eq(resourceContext))).thenReturn(response));
+        }
 
+        void throwFrom(ResourceRouter router){
+            build(response -> {
+                WebApplicationException ex = new WebApplicationException(response);
+                when(router.dispatch(any(),eq(resourceContext))).thenThrow(ex);
+            });
+        }
+        void build(Consumer<OutboundResponse> consumer){
+            OutboundResponse response = build();
 
+            consumer.accept(response);
+        }
+
+        private void stubMessageBodyWriter() {
             when(providers.getMessageBodyWriter(eq(String.class),eq(String.class),same(annotations),eq(mediaType))).thenReturn(
                     new MessageBodyWriter<>() {
                         @Override
@@ -159,7 +192,21 @@ public class ResourceServletTest extends ServletTest {
                         }
                     }
             );
+        }
 
+        OutboundResponse build() {
+            OutboundResponse response = mock(OutboundResponse.class);
+            when(response.getStatus()).thenReturn(status.getStatusCode());
+            when(response.getStatusInfo()).thenReturn(status);
+            when(response.getHeaders()).thenReturn(headers);
+            when(response.getGenericEntity()).thenReturn(entity);
+            when(response.getAnnotations()).thenReturn(annotations);
+            when(response.getMediaType()).thenReturn(mediaType);
+            when(router.dispatch(any(), eq(resourceContext))).thenReturn(response);
+
+            stubMessageBodyWriter();
+
+            return response;
         }
     }
 }

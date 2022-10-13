@@ -8,9 +8,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.container.ResourceContext;
 import jakarta.ws.rs.core.GenericEntity;
 import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.MessageBodyWriter;
 import jakarta.ws.rs.ext.Providers;
 import jakarta.ws.rs.ext.RuntimeDelegate;
@@ -40,7 +42,17 @@ public class ResourceServlet extends HttpServlet {
         ResourceRouter router = runtime.getResourceRouter();
         Providers providers = runtime.getProviders();
 
-        OutboundResponse response = router.dispatch(req, runtime.createResourceContext(req, resp));
+        OutboundResponse response;
+
+        try {
+            response = router.dispatch(req, runtime.createResourceContext(req, resp));
+        }catch (WebApplicationException ex){
+            response = (OutboundResponse) ex.getResponse();
+        }catch (Throwable throwable){
+            ExceptionMapper mapper = providers.getExceptionMapper(throwable.getClass());
+            response = (OutboundResponse) mapper.toResponse(throwable);
+        }
+
         resp.setStatus(response.getStatus());
         MultivaluedMap<String, Object> headers = response.getHeaders();
         for(String name : headers.keySet()){
