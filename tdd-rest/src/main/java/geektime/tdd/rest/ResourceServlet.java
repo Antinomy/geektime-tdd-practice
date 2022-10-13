@@ -42,14 +42,28 @@ public class ResourceServlet extends HttpServlet {
         }
     }
 
-    private OutboundResponse from(Throwable throwable) {
-        ExceptionMapper mapper = providers.getExceptionMapper(throwable.getClass());
-        return (OutboundResponse) mapper.toResponse(throwable);
-    }
 
 
     private void response(HttpServletResponse resp, OutboundResponse response) throws IOException {
         resp.setStatus(response.getStatus());
+
+        headers(resp, response);
+
+        body(resp, response);
+    }
+
+    private void body(HttpServletResponse resp, OutboundResponse response) throws IOException {
+        GenericEntity entity = response.getGenericEntity();
+        if(entity != null) {
+            MessageBodyWriter writer = providers.getMessageBodyWriter(
+                    entity.getRawType(), entity.getType(), response.getAnnotations(), response.getMediaType());
+
+            writer.writeTo(entity.getEntity(), entity.getRawType(), entity.getType(), response.getAnnotations(), response.getMediaType(),
+                    response.getHeaders(), resp.getOutputStream());
+        }
+    }
+
+    private static void headers(HttpServletResponse resp, OutboundResponse response) {
         MultivaluedMap<String, Object> headers = response.getHeaders();
         for(String name : headers.keySet()){
             for(Object value:headers.get(name)){
@@ -57,12 +71,10 @@ public class ResourceServlet extends HttpServlet {
                 resp.addHeader(name, delegate.toString(value));
             }
         }
+    }
 
-        GenericEntity entity = response.getGenericEntity();
-        if(entity != null) {
-            MessageBodyWriter writer = providers.getMessageBodyWriter(entity.getRawType(), entity.getType(), response.getAnnotations(), response.getMediaType());
-            writer.writeTo(entity.getEntity(), entity.getRawType(), entity.getType(), response.getAnnotations(), response.getMediaType(),
-                    response.getHeaders(), resp.getOutputStream());
-        }
+    private OutboundResponse from(Throwable throwable) {
+        ExceptionMapper mapper = providers.getExceptionMapper(throwable.getClass());
+        return (OutboundResponse) mapper.toResponse(throwable);
     }
 }

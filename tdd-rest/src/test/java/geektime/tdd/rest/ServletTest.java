@@ -44,11 +44,15 @@ public abstract class ServletTest {
     }
 
 
-    protected HttpResponse<String> get(String path) throws Exception{
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder(path(path)).GET().build();
-        HttpResponse<String> response = client.send(request,HttpResponse.BodyHandlers.ofString());
-        return response;
+    protected HttpResponse<String> get(String path) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder(path(path)).GET().build();
+            HttpResponse<String> response = client.send(request,HttpResponse.BodyHandlers.ofString());
+            return response;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
 
