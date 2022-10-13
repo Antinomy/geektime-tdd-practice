@@ -8,6 +8,7 @@ import jakarta.ws.rs.ext.MessageBodyWriter;
 import jakarta.ws.rs.ext.Providers;
 import jakarta.ws.rs.ext.RuntimeDelegate;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.function.Executable;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -136,8 +137,21 @@ public class ResourceServletTest extends ServletTest {
         }
     }
 
-    @Test
-
+    @TestFactory
+    public List RespondWhenExtensionMissing() {
+        List tests = new ArrayList<>();
+        Map<String, Executable> extensions = Map.of(
+                "MessageBodyWriter", () -> response().entity(new GenericEntity<>(1, Integer.class), new Annotation[0]).returnFrom(router),
+                "HeaderDelegate", () -> response().headers(HttpHeaders.DATE, new Date()).returnFrom(router),
+                "ExceptionMapper", () -> when(router.dispatch(any(), eq(resourceContext))).thenThrow(IllegalStateException.class));
+        for (String name : extensions.keySet())
+            tests.add(DynamicTest.dynamicTest(name + " not found", () -> {
+                extensions.get(name).execute();
+                when(providers.getExceptionMapper(eq(NullPointerException.class))).thenReturn(e -> response().status(Response.Status.INTERNAL_SERVER_ERROR).build());
+                HttpResponse httpResponse = get("/test");
+                assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), httpResponse.statusCode()); }));
+        return tests;
+    }
 
     @TestFactory
     public List<DynamicTest> RespondForException() {
