@@ -113,6 +113,34 @@ public class ResourceServletTest extends ServletTest {
     }
 
     @Test
+    public void should_use_response_from_web_app_ex_thrown_by_ex_mapper() throws Exception {
+        when(router.dispatch(any(),eq(resourceContext))).thenThrow(RuntimeException.class);
+        when(providers.getExceptionMapper(eq(RuntimeException.class))).thenReturn(ex ->{
+                            throw new WebApplicationException(response.status(Response.Status.FORBIDDEN).build());
+                });
+
+        HttpResponse<String> httpResponse = get("/test");
+
+        assertEquals(Response.Status.FORBIDDEN.getStatusCode(),httpResponse.statusCode());
+    }
+
+    @Test
+    public void should_map_app_ex_thrown_by_ex_mapper() throws Exception {
+        when(router.dispatch(any(),eq(resourceContext))).thenThrow(RuntimeException.class);
+
+        when(providers.getExceptionMapper(eq(RuntimeException.class))).thenReturn(ex ->{
+            throw new IllegalArgumentException();
+        });
+
+        when(providers.getExceptionMapper(eq(IllegalArgumentException.class)))
+                .thenReturn(ex -> response.status(Response.Status.FORBIDDEN).build());
+
+        HttpResponse<String> httpResponse = get("/test");
+
+        assertEquals(Response.Status.FORBIDDEN.getStatusCode(),httpResponse.statusCode());
+    }
+
+    @Test
     public void should_build_response_by_ex_mapper_from_web_app_ex() throws Exception {
         when(router.dispatch(any(),eq(resourceContext))).thenThrow(RuntimeException.class);
         when(providers.getExceptionMapper(eq(RuntimeException.class))).thenReturn(ex -> response.status(Response.Status.FORBIDDEN).build());
@@ -120,6 +148,15 @@ public class ResourceServletTest extends ServletTest {
         HttpResponse<String> httpResponse = get("/test");
 
         assertEquals(Response.Status.FORBIDDEN.getStatusCode(),httpResponse.statusCode());
+    }
+
+    @Test
+    public void should_not_call_message_body_writer_if_entity_is_null() throws Exception {
+      response.entity(null,new Annotation[0]).returnFrom(router);
+
+        HttpResponse<String> httpResponse = get("/test");
+        assertEquals("",httpResponse.body());
+        assertEquals(Response.Status.OK.getStatusCode(), httpResponse.statusCode());
     }
 
 
