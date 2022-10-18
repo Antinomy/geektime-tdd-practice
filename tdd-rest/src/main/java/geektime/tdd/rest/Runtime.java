@@ -12,5 +12,7 @@ public interface Runtime {
 
     Context getApplicationContext();
 
+    UriInfoBuilder createUriInfoBuilder(HttpServletRequest request);
+
     ResourceRouter getResourceRouter();
 }
