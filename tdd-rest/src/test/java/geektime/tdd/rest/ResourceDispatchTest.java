@@ -61,8 +61,21 @@ public class ResourceDispatchTest {
         OutboundResponse response = router.dispatch(request,context);
         assertSame(entity,response.getGenericEntity());
         assertEquals(200,response.getStatus());
+    }
 
+    @Test
+    public void should_sort_matched_root_resource_descending_order(){
+        GenericEntity<String> entity1 = new GenericEntity("1",String.class);
+        GenericEntity<String> entity2 = new GenericEntity("2",String.class);
 
+        ResourceRouter.RootResource matched2 = rootResource(matched("/users/1", result("/1",2)), returns(entity2));
+        ResourceRouter.RootResource matched1 = rootResource(matched("/users/1", result("/1",1)), returns(entity1));
+
+        ResourceRouter router = new DefaultResourceRouter(runtime,List.of(matched2,matched1));
+
+        OutboundResponse response = router.dispatch(request,context);
+        assertSame(entity1,response.getGenericEntity());
+        assertEquals(200,response.getStatus());
     }
 
     private static ResourceRouter.RootResource rootResource(UriTemplate unmatchedUrlTemplate) {
@@ -101,6 +114,42 @@ public class ResourceDispatchTest {
         UriTemplate.MatchResult result = mock(UriTemplate.MatchResult.class);
         when(result.getRemaining()).thenReturn(path);
         return result;
+    }
+
+    private  UriTemplate.MatchResult result(String path, Integer order) {
+
+        return new FakeMathResult(path,order);
+    }
+
+    class FakeMathResult implements UriTemplate.MatchResult{
+
+        private String remaining;
+        private Integer order;
+
+        public FakeMathResult(String remaining, Integer order) {
+            this.remaining = remaining;
+            this.order = order;
+        }
+
+        @Override
+        public String getMatched() {
+            return null;
+        }
+
+        @Override
+        public String getRemaining() {
+            return remaining;
+        }
+
+        @Override
+        public Map<String, String> getPathParameters() {
+            return null;
+        }
+
+        @Override
+        public int compareTo(UriTemplate.MatchResult o) {
+            return order.compareTo(((FakeMathResult)o).order);
+        }
     }
 
     private class StubRBuilder extends Response.ResponseBuilder {
