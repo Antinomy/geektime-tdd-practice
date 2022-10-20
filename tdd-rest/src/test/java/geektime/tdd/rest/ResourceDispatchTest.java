@@ -12,8 +12,7 @@ import java.lang.annotation.Annotation;
 import java.net.URI;
 import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 
@@ -78,9 +77,42 @@ public class ResourceDispatchTest {
         assertEquals(200,response.getStatus());
     }
 
-    private static ResourceRouter.RootResource rootResource(UriTemplate unmatchedUrlTemplate) {
+    @Test
+    public void should_return_404_if_no_resource(){
+        ResourceRouter.RootResource unmatched = rootResource(unmatched("/users/1"));
+
+        ResourceRouter router = new DefaultResourceRouter(runtime,List.of(unmatched));
+
+        OutboundResponse response = router.dispatch(request,context);
+        assertNull(response.getGenericEntity());
+        assertEquals(404,response.getStatus());
+    }
+
+    @Test
+    public void should_return_404_if_no_method_matched(){
+        ResourceRouter.RootResource unmatched = rootResource(matched("/users/1", result("/1",2)));
+
+        ResourceRouter router = new DefaultResourceRouter(runtime,List.of(unmatched));
+
+        OutboundResponse response = router.dispatch(request,context);
+        assertNull(response.getGenericEntity());
+        assertEquals(404,response.getStatus());
+    }
+
+    @Test
+    public void should_return_204_if_no_resource_return_matched(){
+        ResourceRouter.RootResource unmatched = rootResource(matched("/users/1", result("/1",2)),returns(null));
+
+        ResourceRouter router = new DefaultResourceRouter(runtime,List.of(unmatched));
+
+        OutboundResponse response = router.dispatch(request,context);
+        assertNull(response.getGenericEntity());
+        assertEquals(204,response.getStatus());
+    }
+
+    private static ResourceRouter.RootResource rootResource(UriTemplate uriTemplate) {
         ResourceRouter.RootResource unmatched = mock(ResourceRouter.RootResource.class);
-        when(unmatched.getUriTemplate()).thenReturn(unmatchedUrlTemplate);
+        when(unmatched.getUriTemplate()).thenReturn(uriTemplate);
         return unmatched;
     }
 
