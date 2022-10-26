@@ -66,4 +66,40 @@ public class UriTemplateTest {
              new UriTemplateString("/users/{id:[0-9]+}/{id}");
         });
     }
+
+    @Test
+    public void should_compare_for_match_literal(){
+        assertSmaller("/users/1234", "/users/1234", "/users/{id}");
+    }
+
+    @Test
+    public void should_compare_match_variables_if_matched_literal_same(){
+        assertSmaller("/users/1234567890/order", "/{resources}/1234567890/{action}", "/users/{id}/order");
+    }
+
+    @Test
+    public void should_compare_specific_variables_if_matched_literal_same(){
+        assertSmaller("/users/1", "/users/{id:[0-9]+}", "/users/{id}");
+    }
+
+    @Test
+    public void should_compare_equal_matched_result(){
+        UriTemplateString template = new UriTemplateString("/users/{id}");
+
+        UriTemplate.MatchResult result = template.match("/users/1").get();
+
+        assertEquals(0,result.compareTo(result) );
+    }
+
+    private static void assertSmaller(String path, String smallTemplate, String largerTemplate) {
+        UriTemplate smaller = new UriTemplateString(smallTemplate);
+        UriTemplate larger = new UriTemplateString(largerTemplate);
+
+        UriTemplate.MatchResult lhs = smaller.match(path).get();
+        UriTemplate.MatchResult rhs = larger.match(path).get();
+
+        assertTrue( lhs.compareTo(rhs) < 0);
+        assertTrue( rhs.compareTo(lhs) > 0);
+    }
+
 }

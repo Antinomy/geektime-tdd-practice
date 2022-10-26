@@ -17,92 +17,139 @@ interface UriTemplate {
     Optional<MatchResult> match(String path);
 }
 
-class UriTemplateString implements UriTemplate{
-
-    private static final String LeftBracket ="\\{";
-    private static final String RightBracket ="}";
-    private static final String NonBracket ="[^\\{}]+";
-    private static final String VariableName ="\\w[\\w\\.-]*";
+class UriTemplateString implements UriTemplate {
     public static final String Remaining = "(/.*)?";
-    public static final String defaultVariablePattern = "([^/]+?)";
-
-    public static Pattern VARIABLE = Pattern.compile(
-            LeftBracket
-                    + group(VariableName)
-                    + group(":"+group(NonBracket))+"?"
-                    + RightBracket
-    );
     private final Pattern pattern;
-
-    private final List<String> variables = new ArrayList<>();
+    private PathVariables pathVariables = new PathVariables();
+    ;
     private int variableGroupStartFrom;
-    private int  variableNameGroup = 1;
-    private int  variablePatternGroup = 3;
-
-    private static String group(String pattern){
-        return "("+pattern+")";
-    }
 
 
     public UriTemplateString(String template) {
-        pattern = Pattern.compile(group(variable(template))+ Remaining);
+        pattern = Pattern.compile(group(variable(template)) + Remaining);
         variableGroupStartFrom = 2;
-    }
-
-    private String variable(String template) {
-        return VARIABLE.matcher(template).replaceAll(result -> {
-
-            String var = result.group(variableNameGroup);
-            String pattern = result.group(variablePatternGroup);
-
-            if(variables.contains(var))
-                throw new IllegalArgumentException("Duplicate Variable" + var);
-
-            variables.add(var);
-
-            return pattern == null ? defaultVariablePattern : group(pattern);
-        });
     }
 
     @Override
     public Optional<MatchResult> match(String path) {
         Matcher matcher = pattern.matcher(path);
 
-        if(!matcher.matches())
+        if (!matcher.matches())
             return Optional.empty();
 
-        int count = matcher.groupCount();
+        return Optional.of(new PathMatchResult(matcher, pathVariables));
+    }
 
-        Map<String,String> parameters = new HashMap<>();
+    private String variable(String template) {
+        return pathVariables.template(template);
+    }
 
-        for (int i = 0; i < variables.size(); i++) {
+    private static String group(String pattern) {
+        return "(" + pattern + ")";
+    }
 
-            parameters.put(variables.get(i), matcher.group(variableGroupStartFrom + i));
+    class PathVariables implements Comparable<PathVariables> {
+        private static final String LeftBracket = "\\{";
+        private static final String RightBracket = "}";
+        private static final String NonBracket = "[^\\{}]+";
+        private static final String VariableName = "\\w[\\w\\.-]*";
+        public static final String defaultVariablePattern = "([^/]+?)";
+
+        public static Pattern VARIABLE = Pattern.compile(
+                LeftBracket
+                        + group(VariableName)
+                        + group(":" + group(NonBracket)) + "?"
+                        + RightBracket
+        );
+
+        private final List<String> variables = new ArrayList<>();
+        private int specificPatternCount = 0;
+        private int variableNameGroup = 1;
+        private int variablePatternGroup = 3;
+
+        private String template(String template) {
+            return VARIABLE.matcher(template).replaceAll(pathVariables::replace);
         }
 
+        private String replace(java.util.regex.MatchResult result) {
 
-        MatchResult result = new MatchResult() {
-            @Override
-            public String getMatched() {
-                return matcher.group(1);
+            String var = result.group(variableNameGroup);
+            String pattern = result.group(variablePatternGroup);
+
+            if (variables.contains(var))
+                throw new IllegalArgumentException("Duplicate Variable" + var);
+
+            variables.add(var);
+
+            if (pattern != null) {
+                specificPatternCount++;
+                return group(pattern);
             }
 
-            @Override
-            public String getRemaining() {
-                return matcher.group(count);
-            }
+            return defaultVariablePattern;
 
-            @Override
-            public Map<String, String> getPathParameters() {
-                return parameters;
-            }
+        }
 
-            @Override
-            public int compareTo(MatchResult o) {
-                return 0;
-            }
-        };
+        @Override
+        public int compareTo(PathVariables o) {
+            if (specificPatternCount > o.specificPatternCount) return -1;
+            if (specificPatternCount < o.specificPatternCount) return 1;
 
-        return Optional.of(result);
+            return 0;
+        }
     }
+
+    class PathMatchResult implements UriTemplate.MatchResult {
+        private Matcher matcher;
+        private Map<String, String> parameters = new HashMap<>();
+        private int count;
+        private int matchLiteralCount;
+
+
+        private PathVariables pathVariables;
+
+        public PathMatchResult(Matcher matcher, PathVariables pathVariables) {
+            this.matcher = matcher;
+            this.count = matcher.groupCount();
+            this.matchLiteralCount = matcher.group(1).length();
+            this.pathVariables = pathVariables;
+
+            for (int i = 0; i < pathVariables.variables.size(); i++) {
+                parameters.put(pathVariables.variables.get(i), matcher.group(variableGroupStartFrom + i));
+                matchLiteralCount -= matcher.group(variableGroupStartFrom + i).length();
+            }
+
+        }
+
+        public String getMatched() {
+            return matcher.group(1);
+        }
+
+        @Override
+        public String getRemaining() {
+            return matcher.group(count);
+        }
+
+        @Override
+        public Map<String, String> getPathParameters() {
+            return parameters;
+        }
+
+        @Override
+        public int compareTo(UriTemplate.MatchResult o) {
+            PathMatchResult result = (PathMatchResult) o;
+
+            if (matchLiteralCount > result.matchLiteralCount) return -1;
+            if (matchLiteralCount < result.matchLiteralCount) return 1;
+
+            if (parameters.size() > result.parameters.size()) return -1;
+            if (parameters.size() < result.parameters.size()) return 1;
+
+            return pathVariables.compareTo(result.pathVariables);
+        }
+
+    }
+
+
 }
+
