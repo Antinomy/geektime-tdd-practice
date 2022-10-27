@@ -21,12 +21,11 @@ class UriTemplateString implements UriTemplate {
     public static final String Remaining = "(/.*)?";
     private final Pattern pattern;
     private PathVariables pathVariables = new PathVariables();
-    ;
     private int variableGroupStartFrom;
 
 
     public UriTemplateString(String template) {
-        pattern = Pattern.compile(group(variable(template)) + Remaining);
+        pattern = Pattern.compile(group(pathVariables.template(template)) + Remaining);
         variableGroupStartFrom = 2;
     }
 
@@ -38,10 +37,6 @@ class UriTemplateString implements UriTemplate {
             return Optional.empty();
 
         return Optional.of(new PathMatchResult(matcher, pathVariables));
-    }
-
-    private String variable(String template) {
-        return pathVariables.template(template);
     }
 
     private static String group(String pattern) {
@@ -66,6 +61,16 @@ class UriTemplateString implements UriTemplate {
         private int specificPatternCount = 0;
         private int variableNameGroup = 1;
         private int variablePatternGroup = 3;
+
+        Map<String, String> parameters =new HashMap<>();
+
+        private Map<String, String> extract(Matcher matcher){
+            for (int i = 0; i < pathVariables.variables.size(); i++) {
+                parameters.put(pathVariables.variables.get(i), matcher.group(variableGroupStartFrom + i));
+            }
+           return parameters;
+        }
+
 
         private String template(String template) {
             return VARIABLE.matcher(template).replaceAll(pathVariables::replace);
@@ -95,29 +100,31 @@ class UriTemplateString implements UriTemplate {
             if (specificPatternCount > o.specificPatternCount) return -1;
             if (specificPatternCount < o.specificPatternCount) return 1;
 
+            if (parameters.size() > o.parameters.size()) return -1;
+            if (parameters.size() < o.parameters.size()) return 1;
+
             return 0;
         }
     }
 
     class PathMatchResult implements UriTemplate.MatchResult {
         private Matcher matcher;
-        private Map<String, String> parameters = new HashMap<>();
+        private Map<String, String> parameters;
         private int count;
         private int matchLiteralCount;
 
 
-        private PathVariables pathVariables;
+        private PathVariables variables;
 
         public PathMatchResult(Matcher matcher, PathVariables pathVariables) {
             this.matcher = matcher;
             this.count = matcher.groupCount();
-            this.matchLiteralCount = matcher.group(1).length();
-            this.pathVariables = pathVariables;
 
-            for (int i = 0; i < pathVariables.variables.size(); i++) {
-                parameters.put(pathVariables.variables.get(i), matcher.group(variableGroupStartFrom + i));
-                matchLiteralCount -= matcher.group(variableGroupStartFrom + i).length();
-            }
+            this.variables = pathVariables;
+            this.parameters = pathVariables.extract(matcher);
+
+            this.matchLiteralCount = matcher.group(1).length()
+                    - parameters.values().stream().map(String::length).reduce(0,(a,b) -> a+b);
 
         }
 
@@ -142,10 +149,7 @@ class UriTemplateString implements UriTemplate {
             if (matchLiteralCount > result.matchLiteralCount) return -1;
             if (matchLiteralCount < result.matchLiteralCount) return 1;
 
-            if (parameters.size() > result.parameters.size()) return -1;
-            if (parameters.size() < result.parameters.size()) return 1;
-
-            return pathVariables.compareTo(result.pathVariables);
+            return variables.compareTo(result.variables);
         }
 
     }
