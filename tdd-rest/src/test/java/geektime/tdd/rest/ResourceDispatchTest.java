@@ -116,16 +116,22 @@ public class ResourceDispatchTest {
         return unmatched;
     }
 
-    private static UriTemplate unmatched(String path) {
-        UriTemplate unmatchedUrlTemplate = mock(UriTemplate.class);
-        when(unmatchedUrlTemplate.match(path)).thenReturn(Optional.empty());
-        return unmatchedUrlTemplate;
+    private static ResourceRouter.RootResource rootResource(StubUriTemplate stub) {
+        ResourceRouter.RootResource unmatched = mock(ResourceRouter.RootResource.class);
+        when(unmatched.getUriTemplate()).thenReturn(stub.uriTemplate);
+        return unmatched;
     }
 
-    private ResourceRouter.RootResource rootResource(UriTemplate matchedUrlTemplate, ResourceRouter.ResourceMethod method) {
+    private static StubUriTemplate unmatched(String path) {
+        UriTemplate unmatchedUrlTemplate = mock(UriTemplate.class);
+        when(unmatchedUrlTemplate.match(path)).thenReturn(Optional.empty());
+        return new StubUriTemplate(unmatchedUrlTemplate,null);
+    }
+
+    private ResourceRouter.RootResource rootResource(StubUriTemplate stub, ResourceRouter.ResourceMethod method) {
         ResourceRouter.RootResource matched = mock(ResourceRouter.RootResource.class);
-        when(matched.getUriTemplate()).thenReturn(matchedUrlTemplate);
-        when(matched.matches(eq("/1"), eq("GET"), eq(new String[]{MediaType.WILDCARD}), eq(builder)))
+        when(matched.getUriTemplate()).thenReturn(stub.uriTemplate);
+        when(matched.matches(same(stub.result), eq("GET"), eq(new String[]{MediaType.WILDCARD}), eq(builder)))
                 .thenReturn(Optional.of(method));
         return matched;
     }
@@ -136,11 +142,13 @@ public class ResourceDispatchTest {
         return method;
     }
 
-    private static UriTemplate matched(String path, UriTemplate.MatchResult result) {
+    private static StubUriTemplate matched(String path, UriTemplate.MatchResult result) {
         UriTemplate matchedUrlTemplate = mock(UriTemplate.class);
         when(matchedUrlTemplate.match(path)).thenReturn(Optional.of(result));
-        return matchedUrlTemplate;
+        return new StubUriTemplate(matchedUrlTemplate,result);
     }
+
+    record StubUriTemplate(UriTemplate uriTemplate, UriTemplate.MatchResult result){}
 
     private static UriTemplate.MatchResult result(String path) {
         UriTemplate.MatchResult result = mock(UriTemplate.MatchResult.class);

@@ -17,14 +17,14 @@ interface UriTemplate {
     Optional<MatchResult> match(String path);
 }
 
-class UriTemplateString implements UriTemplate {
+class PathTemplate implements UriTemplate {
     public static final String Remaining = "(/.*)?";
     private final Pattern pattern;
     private PathVariables pathVariables = new PathVariables();
     private int variableGroupStartFrom;
 
 
-    public UriTemplateString(String template) {
+    public PathTemplate(String template) {
         pattern = Pattern.compile(group(pathVariables.template(template)) + Remaining);
         variableGroupStartFrom = 2;
     }

@@ -1,6 +1,7 @@
 package geektime.tdd.rest;
 
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
@@ -36,6 +37,27 @@ public class RootResourceTest {
         public String hello(){
             return "hello";
         }
+
+        @GET
+        @Path("/topics/{id}")
+        @Produces(MediaType.TEXT_PLAIN)
+        public String topicId(){
+            return "topicId";
+        }
+
+        @GET
+        @Path("/topics/1234")
+        @Produces(MediaType.TEXT_PLAIN)
+        public String topic1234(){
+            return "topic1234";
+        }
+
+        @POST
+        @Path("/hello")
+        @Produces(MediaType.TEXT_PLAIN)
+        public String postHello(){
+            return "hello";
+        }
     }
 
     @Test
@@ -46,25 +68,19 @@ public class RootResourceTest {
         assertTrue(template.match("/messages/hello").isPresent()) ;
     }
 
-//    @Test
-//    public void should_match_resource_method_of_uri_and_http_method_fully_matched(){
-//
-//
-//        String httpMethod = "GET";
-//        String path = "/messages/hello";
-//        String resourceMethod = "Messages.hello";
-//
-//        should_match(httpMethod, path, resourceMethod);
-//    }
 
     @ParameterizedTest
     @CsvSource({
         "GET,/messages/ah,Messages.ah",
-        "GET,/messages/hello,Messages.hello"
+        "GET,/messages/hello,Messages.hello",
+        "POST,/messages/hello,Messages.postHello",
+        "GET,/messages/topics/1234,Messages.topic1234",
+        "GET,/messages/topics/12345,Messages.topicId",
     })
     public  void should_match(String httpMethod, String path, String resourceMethod) {
         ResourceRouter.RootResource resource = new RootResourceClass(Messages.class);
-        ResourceRouter.ResourceMethod method = resource.matches(path, httpMethod, new String[]{MediaType.TEXT_PLAIN}, mock(UriInfoBuilder.class)).get();
+        UriTemplate.MatchResult result = resource.getUriTemplate().match(path).get();
+        ResourceRouter.ResourceMethod method = resource.matches(result, httpMethod, new String[]{MediaType.TEXT_PLAIN}, mock(UriInfoBuilder.class)).get();
         assertEquals(resourceMethod,method.toString());
     }
 }
